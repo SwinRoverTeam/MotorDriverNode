@@ -5,12 +5,22 @@
 
 #define MAX_CURRENT (4000)
 #define CUBE_CAN_ID (0x01)
+#define MIN_DELAY_MICRO_SEC (30) 
+#define LEFT_MOTOR_SPEED (0)
+#define LEFT_STEPS (1)
+#define RIGHT_MOTOR_SPEED (2)
+#define RIGHT_STEPS (3)
+#define MICRO_STEPS (4)
+//
+uint16_t microSteps = 256;
+
 // Left Side Pins
 const uint8_t DirLeftPin = 11; // needs connection
 const uint8_t StepLeftPin = 5; // needs connection
 static long int counterLeft, delayLeft;
+int stepsLeft = 0;
 
-// driver front left
+// driver left
 HighPowerStepperDriver frntLeft;
 #define FrntLeftCS 6 // needs connection
 HighPowerStepperDriver rearLeft;
@@ -20,15 +30,16 @@ HighPowerStepperDriver rearLeft;
 const uint8_t DirRightPin = 10; // needs connection
 const uint8_t StepRightPin = 4; // needs connection
 static long int counterRight, delayRight;
+int stepsRight = 0;
 
-//driver front right
+//driver right
 HighPowerStepperDriver frntRight;
 #define FrntRightCS 8 // needs connection
 HighPowerStepperDriver rearRight;
 #define RearRightCS 9 // needs connection
 
 // SPI
-const uint8_t HighPulseWidth = 3;
+#define PULSE_WIDTH 3
 
 // CAN
 const uint8_t CSCan = 17; // trace on PCB
@@ -52,19 +63,26 @@ void setup_timer()
   TIMSK1 |= (1 << OCIE1A);
 }
 
+void setMicroSteps() {
+  frntLeft.setStepMode(microSteps);
+  frntRight.setStepMode(microSteps);
+  rearLeft.setStepMode(microSteps);
+  rearRight.setStepMode(microSteps);
+}
+
 void step(int pin)
 {
   digitalWrite(pin, HIGH);
-  delayMicroseconds(HighPulseWidth);
+  delayMicroseconds(PULSE_WIDTH);
   digitalWrite(pin, LOW);
-  delayMicroseconds(HighPulseWidth);
+  delayMicroseconds(PULSE_WIDTH);
 }
 
 void setDirection(int pin, bool dir)
 {
-  delayMicroseconds(3);
+  delayMicroseconds(PULSE_WIDTH);
   digitalWrite(pin, dir);
-  delayMicroseconds(3);
+  delayMicroseconds(PULSE_WIDTH);
 }
 
 void setUpDriver(HighPowerStepperDriver sd, int cs) {
@@ -149,32 +167,41 @@ ISR(TIMER1_COMPA_vect) { //This functions runs when timer1 counter is equal to O
 }
 
 // driver motors from command in buf[8]
+//Can frame MotorLeft LeftSteps MotorRight RightSteps microStepping Blank Blank Blank
 void handle_CAN() { 
   if (canId == CUBE_CAN_ID) {
-    if (buf[0] == 151) {
+    //Checking Motor Left value
+    if (buf[LEFT_MOTOR_SPEED] == 151) {
       drivingLeft = false;
     }
-    if (buf[1] == 151) {
+    else if (buf[LEFT_MOTOR_SPEED] < 151) {
+      setDirection(DirLeftPin, HIGH);
+      delayLeft = map(buf[LEFT_MOTOR_SPEED], 151, 110, 255, 0);
+      drivingLeft = true;
+    } else if (buf[LEFT_MOTOR_SPEED] > 151) {
+      setDirection(DirLeftPin, LOW);
+      delayLeft = map(buf[LEFT_MOTOR_SPEED], 151, 192, 255, 0);
+      drivingLeft = true;
+    }
+    //
+    stepsLeft = buf[LEFT_STEPS];
+    //
+    if (buf[RIGHT_MOTOR_SPEED] == 151) {
       drivingRight = false;
     }
-    
-    if (buf[0] < 151) {
-      setDirection(DirLeftPin, HIGH);
-      delayLeft = map(buf[0], 151, 110, 255, 0);
-      drivingLeft = true;
-    } else if (buf[0] > 151) {
-      setDirection(DirLeftPin, LOW);
-      delayLeft = map(buf[0], 151, 192, 255, 0);
-      drivingLeft = true;
-    }
-    if (buf[1] < 151) {
+    else if (buf[RIGHT_MOTOR_SPEED] < 151) {
       setDirection(DirRightPin, HIGH);
-      delayRight = map(buf[1], 151, 110, 255, 0);
+      delayRight = map(buf[RIGHT_MOTOR_SPEED], 151, 110, 255, 0);
       drivingRight = true;
-    } else if (buf[1] > 151) {
+    } else if (buf[RIGHT_MOTOR_SPEED] > 151) {
       setDirection(DirRightPin, LOW);
-      delayRight = map(buf[1], 151, 192, 255, 0);
+      delayRight = map(buf[RIGHT_MOTOR_SPEED], 151, 192, 255, 0);
       drivingRight = true;
+    }
+    stepsRight = buf[RIGHT_STEPS];
+    //
+    if (pow(2, buf[MICRO_STEPS]) != microSteps) {
+      setMicroSteps(microSteps = pow(2, buf[MICRO_STEPS]));
     }
   }
 }
@@ -188,14 +215,16 @@ void loop()
   }
 
   // maybe perform stepping
-  if (drivingLeft && (counterLeft > delayLeft + 30)) {
+  if (drivingLeft && (counterLeft > delayLeft + MIN_DELAY_MICRO_SEC) && stepsLeft > 0) {
     step(StepLeftPin);
     counterLeft = 0;
+    stepsLeft--;
   }
   
-  if (drivingRight && (counterRight > delayRight + 30)) {
+  if (drivingRight && (counterRight > delayRight + MIN_DELAY_MICRO_SEC) && stepsRight > 0) {
     step(StepRightPin);
     counterRight = 0;
+    stepsRight--;
   }
 
   counterLeft++;
