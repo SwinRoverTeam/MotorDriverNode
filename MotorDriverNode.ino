@@ -59,11 +59,6 @@ void setup_timer()
   TIMSK1 |= (1 << OCIE1A);
 }
 
-void setMicroSteps() {
-  left_driver.setStepMode(microSteps);
-  right_driver.setStepMode(microSteps);
-}
-
 void step(int pin)
 {
   digitalWrite(pin, HIGH);
@@ -183,13 +178,14 @@ void setMotorValues() {
     drivingRight = true;
   }
   stepsRight = buf[RIGHT_STEPS];
-  
-  if (pow(2, buf[MICRO_STEPS]) + 1 != microSteps) {
+  if (uint16_t(pow(2, buf[MICRO_STEPS]) + 1) != uint16_t(microSteps)) {
     microSteps = pow(2, buf[MICRO_STEPS]) + 1;
     Serial.println(microSteps);
-    setMicroSteps();
+    setUpDriver(left_driver, 8);
+    setUpDriver(right_driver, 9);
   }
 }
+
 
 void loop()
 {
