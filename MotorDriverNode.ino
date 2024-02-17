@@ -2,9 +2,9 @@
 #include <mcp_can.h>
 #include <SPI.h>
 #include <HighPowerStepperDriver.h>
+#include "SwinCAN.h"
 
 #define MAX_CURRENT (4000)
-#define CUBE_CAN_ID (0x01)
 #define MIN_DELAY_MICRO_SEC (30) 
 #define LEFT_MOTOR_SPEED (0)
 #define LEFT_STEPS (1)
@@ -15,28 +15,28 @@
 uint16_t microSteps = 256;
 
 // Left Side Pins
-const uint8_t DirLeftPin = 11; // needs connection
-const uint8_t StepLeftPin = 5; // needs connection
+const uint8_t DirLeftPin = 5; // needs connection
+const uint8_t StepLeftPin = 11; // needs connection
 static long int counterLeft, delayLeft;
 int stepsLeft = 0;
 
 // driver left
 HighPowerStepperDriver frntLeft;
-#define FrntLeftCS 6 // needs connection
+#define FrntLeftCS 8 // needs connection
 HighPowerStepperDriver rearLeft;
-#define RearLeftCS A0 // needs connection
+#define RearLeftCS 9 // needs connection maybe 6
 
 //Right Side Pins
-const uint8_t DirRightPin = 10; // needs connection
-const uint8_t StepRightPin = 4; // needs connection
+const uint8_t DirRightPin = 4; // needs connection
+const uint8_t StepRightPin = 10; // needs connection
 static long int counterRight, delayRight;
 int stepsRight = 0;
 
 //driver right
 HighPowerStepperDriver frntRight;
-#define FrntRightCS 8 // needs connection
+#define FrntRightCS A0 // needs connection A0
 HighPowerStepperDriver rearRight;
-#define RearRightCS 9 // needs connection
+#define RearRightCS 6 // needs connection
 
 // SPI
 #define PULSE_WIDTH 3
@@ -139,27 +139,25 @@ void setup()
 }
 
 // read a frame of CAN into buf[8]
-unsigned char buf[8]; unsigned long canId = CUBE_CAN_ID; bool read_CAN_flag = false;
+unsigned char buf[8]; bool read_CAN_flag = false;
 void read_CAN()
 {
   if (CAN_MSGAVAIL == CAN.checkReceive()) {
     unsigned char len = 0;
     CAN.readMsgBuf(&len, buf);
-    canId = CAN.getCanId();
+    unsigned long canId = CAN.getCanId();
 
-    if (canId == 1) {
+    if (canId == cube + drive_motor) {
       /*
       for (int i = 0; i < 2; i++) {Serial.print(buf[i], HEX); Serial.print('\t');}
       Serial.println(' ');
       */
-
-      handle_CAN();
+      setMotorValues();
+    }
+    else if (canId == power_supply + heart_beat) {
+      //heartbeat();
     }
   }
-  /* fake reading CAN
-  buf[0] = 190; // full forward
-  buf[1] = 170; //half ish
-  */
 }
 
 ISR(TIMER1_COMPA_vect) { //This functions runs when timer1 counter is equal to OCR1A
@@ -168,41 +166,40 @@ ISR(TIMER1_COMPA_vect) { //This functions runs when timer1 counter is equal to O
 
 // driver motors from command in buf[8]
 //Can frame MotorLeft LeftSteps MotorRight RightSteps microStepping Blank Blank Blank
-void handle_CAN() { 
-  if (canId == CUBE_CAN_ID) {
-    //Checking Motor Left value
-    if (buf[LEFT_MOTOR_SPEED] == 151) {
-      drivingLeft = false;
-    }
-    else if (buf[LEFT_MOTOR_SPEED] < 151) {
-      setDirection(DirLeftPin, HIGH);
-      delayLeft = map(buf[LEFT_MOTOR_SPEED], 151, 110, 255, 0);
-      drivingLeft = true;
-    } else if (buf[LEFT_MOTOR_SPEED] > 151) {
-      setDirection(DirLeftPin, LOW);
-      delayLeft = map(buf[LEFT_MOTOR_SPEED], 151, 192, 255, 0);
-      drivingLeft = true;
-    }
-    //
-    stepsLeft = buf[LEFT_STEPS];
-    //
-    if (buf[RIGHT_MOTOR_SPEED] == 151) {
-      drivingRight = false;
-    }
-    else if (buf[RIGHT_MOTOR_SPEED] < 151) {
-      setDirection(DirRightPin, HIGH);
-      delayRight = map(buf[RIGHT_MOTOR_SPEED], 151, 110, 255, 0);
-      drivingRight = true;
-    } else if (buf[RIGHT_MOTOR_SPEED] > 151) {
-      setDirection(DirRightPin, LOW);
-      delayRight = map(buf[RIGHT_MOTOR_SPEED], 151, 192, 255, 0);
-      drivingRight = true;
-    }
-    stepsRight = buf[RIGHT_STEPS];
-    //
-    if (pow(2, buf[MICRO_STEPS]) != microSteps) {
-      setMicroSteps(microSteps = pow(2, buf[MICRO_STEPS]));
-    }
+void setMotorValues() { 
+  //Checking Motor Left value
+  if (buf[LEFT_MOTOR_SPEED] == 151) {
+    drivingLeft = false;
+  }
+  else if (buf[LEFT_MOTOR_SPEED] < 151) {
+    setDirection(DirLeftPin, HIGH);
+    delayLeft = map(buf[LEFT_MOTOR_SPEED], 151, 110, 255, 0);
+    drivingLeft = true;
+  } else if (buf[LEFT_MOTOR_SPEED] > 151) {
+    setDirection(DirLeftPin, LOW);
+    delayLeft = map(buf[LEFT_MOTOR_SPEED], 151, 192, 255, 0);
+    drivingLeft = true;
+  }
+  //
+  stepsLeft = buf[LEFT_STEPS];
+  //
+  if (buf[RIGHT_MOTOR_SPEED] == 151) {
+    drivingRight = false;
+  }
+  else if (buf[RIGHT_MOTOR_SPEED] < 151) {
+    setDirection(DirRightPin, HIGH);
+    delayRight = map(buf[RIGHT_MOTOR_SPEED], 151, 110, 255, 0);
+    drivingRight = true;
+  } else if (buf[RIGHT_MOTOR_SPEED] > 151) {
+    setDirection(DirRightPin, LOW);
+    delayRight = map(buf[RIGHT_MOTOR_SPEED], 151, 192, 255, 0);
+    drivingRight = true;
+  }
+  stepsRight = buf[RIGHT_STEPS];
+  //
+  if (pow(2, buf[MICRO_STEPS]) != microSteps) {
+    microSteps = pow(2, buf[MICRO_STEPS]);
+    setMicroSteps();
   }
 }
 
@@ -215,13 +212,13 @@ void loop()
   }
 
   // maybe perform stepping
-  if (drivingLeft && (counterLeft > delayLeft + MIN_DELAY_MICRO_SEC) && stepsLeft > 0) {
+  if (drivingLeft && (counterLeft > delayLeft + MIN_DELAY_MICRO_SEC)) {
     step(StepLeftPin);
     counterLeft = 0;
     stepsLeft--;
   }
   
-  if (drivingRight && (counterRight > delayRight + MIN_DELAY_MICRO_SEC) && stepsRight > 0) {
+  if (drivingRight && (counterRight > delayRight + MIN_DELAY_MICRO_SEC)) {
     step(StepRightPin);
     counterRight = 0;
     stepsRight--;
