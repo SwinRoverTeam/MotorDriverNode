@@ -4,7 +4,7 @@
 #include <HighPowerStepperDriver.h>
 #include "SwinCAN.h"
 
-#define MAX_CURRENT (4000)
+#define MAX_CURRENT (4000) // DO NOT CHANGE
 #define MIN_DELAY_MICRO_SEC (30) 
 #define LEFT_MOTOR_SPEED (0)
 #define LEFT_STEPS (1)
@@ -21,22 +21,18 @@ static long int counterLeft, delayLeft;
 int stepsLeft = 0;
 
 // driver left
-HighPowerStepperDriver frntLeft;
-#define FrntLeftCS 8 // needs connection
-HighPowerStepperDriver rearLeft;
-#define RearLeftCS 9 // needs connection maybe 6
+HighPowerStepperDriver left_driver;
+#define LEFT_CS 8 // needs connection
 
 //Right Side Pins
-const uint8_t DirRightPin = 4; // needs connection
+const uint8_t DirRightPin = 5; // needs connection
 const uint8_t StepRightPin = 10; // needs connection
 static long int counterRight, delayRight;
 int stepsRight = 0;
 
 //driver right
-HighPowerStepperDriver frntRight;
-#define FrntRightCS A0 // needs connection A0
-HighPowerStepperDriver rearRight;
-#define RearRightCS 6 // needs connection
+HighPowerStepperDriver right_driver;
+#define RIGHT_CS 8 // needs connection
 
 // SPI
 #define PULSE_WIDTH 3
@@ -64,10 +60,8 @@ void setup_timer()
 }
 
 void setMicroSteps() {
-  frntLeft.setStepMode(microSteps);
-  frntRight.setStepMode(microSteps);
-  rearLeft.setStepMode(microSteps);
-  rearRight.setStepMode(microSteps);
+  left_driver.setStepMode(microSteps);
+  right_driver.setStepMode(microSteps);
 }
 
 void step(int pin)
@@ -118,19 +112,14 @@ void setup()
   pinMode(DirRightPin, OUTPUT);
   digitalWrite(DirRightPin, LOW);
 
-  delay(3);
+  delay(2000);
 
   //Set up drivers
-  setUpDriver(frntLeft, FrntLeftCS);
-  setUpDriver(rearLeft, RearLeftCS);
-  setUpDriver(frntRight, FrntRightCS);
-  setUpDriver(rearRight, RearRightCS);
-
-
+  setUpDriver(left_driver, LEFT_CS);
+  setUpDriver(right_driver, RIGHT_CS);
+  
   // initialise CAN connection
   CAN.begin(CAN_1000KBPS); // init can bus : baudrate = 1000k
-
-  delay(10);
 
   counterLeft = counterRight = delayLeft = delayRight = 0;
 
