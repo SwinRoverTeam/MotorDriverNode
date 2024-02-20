@@ -179,10 +179,13 @@ void setMotorValues() {
   }
   stepsRight = buf[RIGHT_STEPS];
   if (uint16_t(pow(2, buf[MICRO_STEPS]) + 1) != uint16_t(microSteps)) {
+    noInterrupts();
     microSteps = pow(2, buf[MICRO_STEPS]) + 1;
     Serial.println(microSteps);
     setUpDriver(left_driver, 8);
     setUpDriver(right_driver, 9);
+    interrupts();
+
   }
 }
 
@@ -210,4 +213,4 @@ void loop()
 
   counterLeft++;
   counterRight++;
-}
+}
