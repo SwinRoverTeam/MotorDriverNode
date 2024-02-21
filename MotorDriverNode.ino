@@ -10,9 +10,10 @@
 #define LEFT_STEPS (1)
 #define RIGHT_MOTOR_SPEED (2)
 #define RIGHT_STEPS (3)
-#define MICRO_STEPS (4)
+#define TORQUE (4)
 //
-uint16_t microSteps = 256;
+uint16_t microSteps = 16;
+int delayScalar = 1;
 
 // Left Side Pins
 const uint8_t DirLeftPin = 4; // needs connection
@@ -178,15 +179,8 @@ void setMotorValues() {
     drivingRight = true;
   }
   stepsRight = buf[RIGHT_STEPS];
-  if (uint16_t(pow(2, buf[MICRO_STEPS]) + 1) != uint16_t(microSteps)) {
-    noInterrupts();
-    microSteps = pow(2, buf[MICRO_STEPS]) + 1;
-    Serial.println(microSteps);
-    setUpDriver(left_driver, 8);
-    setUpDriver(right_driver, 9);
-    interrupts();
-
-  }
+  delayScalar = (buf[TORQUE] - 3); //Remove -3 when microstepping is fixed
+  Serial.println(delayScalar);
 }
 
 
@@ -199,13 +193,13 @@ void loop()
   }
 
   // maybe perform stepping
-  if (drivingLeft && (counterLeft > delayLeft + MIN_DELAY_MICRO_SEC)) {
+  if (drivingLeft && (counterLeft > ((delayLeft + MIN_DELAY_MICRO_SEC) * delayScalar))) {
     step(StepLeftPin);
     counterLeft = 0;
     //stepsLeft--;
   }
   
-  if (drivingRight && (counterRight > delayRight + MIN_DELAY_MICRO_SEC)) {
+  if (drivingRight && (counterRight > ((delayRight + MIN_DELAY_MICRO_SEC) * delayScalar))) {
     step(StepRightPin);
     counterRight = 0;
     //stepsRight--;
