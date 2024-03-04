@@ -5,14 +5,14 @@
 #include "SwinCAN.h"
 
 #define MAX_CURRENT (4000) // DO NOT CHANGE
-#define MIN_DELAY_MICRO_SEC (20) 
-#define LEFT_MOTOR_SPEED (0)
+#define MIN_DELAY_MICRO_SEC (40) 
+#define LEFT_MOTOR_SPEED (2)
 #define LEFT_STEPS (1)
 #define RIGHT_MOTOR_SPEED (2)
 #define RIGHT_STEPS (3)
 #define MICRO_STEPS (4)
 //
-uint16_t microSteps = 256;
+uint16_t microSteps = 16;
 
 // Left Side Pins
 const uint8_t DirLeftPin = 4; // needs connection

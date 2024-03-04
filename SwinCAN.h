@@ -10,7 +10,7 @@ enum NodeClass {
 
 enum cmd_type {
 	heart_beat = 0x01,
-	drive_motor = 0x024,
+	drive_motor = 0x02,
 	set_relay = 0x03,
 	set_arm = 0x04
 };
