@@ -2,15 +2,15 @@
 #include <mcp_can.h>
 #include <SPI.h>
 #include <swinCan.h>
-
-
-#define MAX_CURRENT (3000) // DO NOT CHANGE
-#define MIN_DELAY_MICRO_SEC (50) 
+#define MIN_DELAY_MICRO_SEC (100)//Try to keep above 2*pulse width - minimum 50.
 #define LEFT_MOTOR_SPEED (0)
 #define LEFT_STEPS (1)
 #define RIGHT_MOTOR_SPEED (2)
 #define RIGHT_STEPS (3)
 #define TORQUE (4)
+
+long counter;
+
 //
 int delayScalar = 1;
 
@@ -32,16 +32,18 @@ const uint8_t StepRearRightPin = 12; // Orange
 static long int counterRight, delayRight;
 int stepsRight = 0;
 
+bool l_state = false;
+bool r_state = false;
 
 // SPI
-#define PULSE_WIDTH 50
+#define PULSE_WIDTH 100 //Don't go lower than 25
 
 // CAN
 const uint8_t CSCan = 17; // trace on PCB
 MCP_CAN CAN(CSCan);
 
-bool drivingRight;
-bool drivingLeft;
+bool drivingRight = false;
+bool drivingLeft = false;
 
 void setup_timer()
 {
@@ -49,7 +51,7 @@ void setup_timer()
   TCCR1B = 0; // same for TCCR1B
   TCNT1 = 0;  // initialize counter value to 0
   // set compare match register for 2khz increments
-  OCR1A = 824; // = (16*10^6) / (2 * interruptFreq * PreScaler) - 1, must be <= 65,535 (unsigned 16 bits). Timer 0 and 2 can only store upto 255 (unsigned 8 bits)
+  OCR1A = 924; // = (16*10^6) / (2 * interruptFreq * PreScaler) - 1, must be <= 65,535 (unsigned 16 bits). Timer 0 and 2 can only store upto 255 (unsigned 8 bits)
   // turn on CTC mode
   TCCR1B |= (1 << WGM12);
   // Set CS11 and CS10 for prescaler of 64, see register chart for other prescalers, they are set by manipulating CS10, CS11 and CS12.
@@ -58,12 +60,18 @@ void setup_timer()
   TIMSK1 |= (1 << OCIE1A);
 }
 
-void step(int pin)
+void flip_left()
 {
-  digitalWrite(pin, HIGH);
-  delayMicroseconds(PULSE_WIDTH);
-  digitalWrite(pin, LOW);
-  delayMicroseconds(PULSE_WIDTH);
+  l_state = !l_state;
+  digitalWrite(StepFrontLeftPin, l_state);
+  digitalWrite(StepRearLeftPin, l_state);
+}
+
+void flip_right()
+{
+  r_state = !r_state;
+  digitalWrite(StepFrontRightPin, r_state);
+  digitalWrite(StepRearRightPin, r_state);
 }
 
 void setDirection(int pin, bool dir)
@@ -108,7 +116,7 @@ void setup()
   // initialise CAN connection
   CAN.begin(CAN_1000KBPS); // init can bus : baudrate = 1000k
 
-  counterLeft = counterRight = delayLeft = delayRight = 0;
+  counter = counterLeft = counterRight = delayLeft = delayRight = 0;
 
   // setup timer configuration registers
   setup_timer();
@@ -136,6 +144,9 @@ ISR(TIMER1_COMPA_vect) { //This functions runs when timer1 counter is equal to O
 // driver motors from command in buf[8]
 //Can frame MotorLeft LeftSteps MotorRight RightSteps microStepping Blank Blank Blank
 void setMotorValues() { 
+  delayScalar = (buf[TORQUE] - 3); //Remove -3 when microstepping is fixed
+  int max = 500 * delayScalar;
+  int min = 200 * delayScalar;
   //Checking Motor Left value
   int left_speed = buf[LEFT_MOTOR_SPEED];
   int right_speed = buf[RIGHT_MOTOR_SPEED];
@@ -145,12 +156,13 @@ void setMotorValues() {
   else if (left_speed < 150) {
     setDirection(DirFrontLeftPin, HIGH);
     setDirection(DirRearLeftPin, HIGH);
-    delayLeft = map(left_speed, 149, 110, 255, 0);
+    
+    delayLeft = map(left_speed, 149, 110, max, min);
     drivingLeft = true;
   } else if (left_speed > 152) {
     setDirection(DirFrontLeftPin, LOW);
     setDirection(DirRearLeftPin, LOW);
-    delayLeft = map(left_speed, 153, 192, 255, 0);
+    delayLeft = map(left_speed, 153, 192, max, min);
     drivingLeft = true;
   }
   //
@@ -161,17 +173,16 @@ void setMotorValues() {
   }
   else if (right_speed < 150) {
     setDirection(DirFrontRightPin, LOW);
-    setDirection(DirRearRightPin, LOW);
-    delayRight = map(right_speed, 149, 110, 255, 0);
+    setDirection(DirRearRightPin, HIGH);
+    delayRight = map(right_speed, 149, 110, max, min);
     drivingRight = true;
   } else if (right_speed > 152) {
     setDirection(DirFrontRightPin, HIGH);
-    setDirection(DirRearRightPin, HIGH);
-    delayRight = map(right_speed, 153, 192, 255, 0);
+    setDirection(DirRearRightPin, LOW);
+    delayRight = map(right_speed, 153, 192, max, min);
     drivingRight = true;
   }
   stepsRight = buf[RIGHT_STEPS];
-  delayScalar = (buf[TORQUE] - 3); //Remove -3 when microstepping is fixed
   //Serial.println(delayScalar);
 }
 
@@ -185,20 +196,15 @@ void loop()
   }
 
   // maybe perform stepping
-  if (drivingLeft && (counterLeft > (delayLeft + MIN_DELAY_MICRO_SEC * delayScalar))) {
-    step(StepFrontLeftPin);
-    step(StepRearLeftPin);
-    counterLeft = 0;
-    //stepsLeft--;
+  if (drivingLeft && ((counter - counterLeft) > delayLeft)) {
+    flip_left();
+    counterLeft = counter;
   }
   
-  if (drivingRight && (counterRight > (delayRight + MIN_DELAY_MICRO_SEC * delayScalar))) {
-    step(StepFrontRightPin);
-    step(StepRearRightPin);
-    counterRight = 0;
-    //stepsRight--;
+  if (drivingRight && ((counter - counterRight) > delayRight)) {
+    flip_right();
+    counterRight = counter;
   }
 
-  counterLeft++;
-  counterRight++;
+  counter++;
 }
