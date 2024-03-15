@@ -144,9 +144,10 @@ ISR(TIMER1_COMPA_vect) { //This functions runs when timer1 counter is equal to O
 // driver motors from command in buf[8]
 //Can frame MotorLeft LeftSteps MotorRight RightSteps microStepping Blank Blank Blank
 void setMotorValues() { 
-  delayScalar = (buf[TORQUE] - 3); //Remove -3 when microstepping is fixed
-  int max = 500 * delayScalar;
-  int min = 200 * delayScalar;
+  Serial.println("Revieved CAN message");
+  delayScalar = (buf[TORQUE] - 4); //Remove -3 when microstepping is fixed
+  int max = 500 + 50 * delayScalar;
+  int min = 200 + 50 * delayScalar;
   //Checking Motor Left value
   int left_speed = buf[LEFT_MOTOR_SPEED];
   int right_speed = buf[RIGHT_MOTOR_SPEED];
@@ -198,11 +199,13 @@ void loop()
   // maybe perform stepping
   if (drivingLeft && ((counter - counterLeft) > delayLeft)) {
     flip_left();
+    Serial.println("Flipping left");
     counterLeft = counter;
   }
   
   if (drivingRight && ((counter - counterRight) > delayRight)) {
     flip_right();
+    Serial.println("Flipping right");
     counterRight = counter;
   }
 
