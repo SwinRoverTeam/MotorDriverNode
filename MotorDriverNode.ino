@@ -36,7 +36,7 @@ bool l_state = false;
 bool r_state = false;
 
 // SPI
-#define PULSE_WIDTH 100 //Don't go lower than 25
+#define PULSE_WIDTH 75 //Don't go lower than 25
 
 // CAN
 const uint8_t CSCan = 17; // trace on PCB
@@ -131,7 +131,7 @@ void read_CAN()
     CAN.readMsgBuf(&len, buf);
     unsigned long canId = CAN.getCanId();
 
-    if (canId == cube + drive_motor) {  
+    if (canId == cube + drive_motor) {
       setMotorValues();
     }
   }
@@ -144,43 +144,49 @@ ISR(TIMER1_COMPA_vect) { //This functions runs when timer1 counter is equal to O
 // driver motors from command in buf[8]
 //Can frame MotorLeft LeftSteps MotorRight RightSteps microStepping Blank Blank Blank
 void setMotorValues() { 
-  Serial.println("Revieved CAN message");
-  delayScalar = (buf[TORQUE] - 4); //Remove -3 when microstepping is fixed
-  int max = 500 + 50 * delayScalar;
+  //Serial.println("Revieved CAN message");
+  delayScalar = 1;//(buf[TORQUE] - 4); //Remove -3 when microstepping is fixed
+  int max = 400 + 50 * delayScalar;
   int min = 200 + 50 * delayScalar;
   //Checking Motor Left value
   int left_speed = buf[LEFT_MOTOR_SPEED];
   int right_speed = buf[RIGHT_MOTOR_SPEED];
-  if (left_speed >= 150 && left_speed <= 152) {
+  //Serial.println(right_speed + leftspeed);
+  if (left_speed > 135 || right_speed > 135 ) {
+    //Serial.println("Out of Range");
+    return;
+  }
+  if (left_speed >= 89 && left_speed <= 92) {
     drivingLeft = false;
   }
-  else if (left_speed < 150) {
+  else if (left_speed < 89) {
     setDirection(DirFrontLeftPin, HIGH);
     setDirection(DirRearLeftPin, HIGH);
-    
-    delayLeft = map(left_speed, 149, 110, max, min);
+    //Serial.println("Left Back");
+    delayLeft = map(left_speed, 88, 50, max, min);
     drivingLeft = true;
-  } else if (left_speed > 152) {
+  } else if (left_speed > 92) {
     setDirection(DirFrontLeftPin, LOW);
     setDirection(DirRearLeftPin, LOW);
-    delayLeft = map(left_speed, 153, 192, max, min);
+    //Serial.println("Left Forward");
+    delayLeft = map(left_speed, 93, 132, max, min);
     drivingLeft = true;
   }
   //
   stepsLeft = buf[LEFT_STEPS];
   //
-  if (right_speed >= 150 && right_speed <= 152) {
+  if (right_speed >= 89 && right_speed <= 92) {
     drivingRight = false;
   }
-  else if (right_speed < 150) {
+  else if (right_speed < 89) {
     setDirection(DirFrontRightPin, LOW);
     setDirection(DirRearRightPin, HIGH);
-    delayRight = map(right_speed, 149, 110, max, min);
+    delayRight = map(right_speed, 88, 50, max, min);
     drivingRight = true;
-  } else if (right_speed > 152) {
+  } else if (right_speed > 92) {
     setDirection(DirFrontRightPin, HIGH);
     setDirection(DirRearRightPin, LOW);
-    delayRight = map(right_speed, 153, 192, max, min);
+    delayRight = map(right_speed, 93, 132, max, min);
     drivingRight = true;
   }
   stepsRight = buf[RIGHT_STEPS];
@@ -199,13 +205,13 @@ void loop()
   // maybe perform stepping
   if (drivingLeft && ((counter - counterLeft) > delayLeft)) {
     flip_left();
-    Serial.println("Flipping left");
+    //Serial.println("Flipping left");
     counterLeft = counter;
   }
   
   if (drivingRight && ((counter - counterRight) > delayRight)) {
     flip_right();
-    Serial.println("Flipping right");
+    //Serial.println("Flipping right");
     counterRight = counter;
   }
 
