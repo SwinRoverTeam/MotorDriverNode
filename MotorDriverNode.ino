@@ -1,3 +1,5 @@
+// simple constant speed driving
+
 #include <mcp_can_dfs.h>
 #include <mcp_can.h>
 #include <SPI.h>
@@ -9,7 +11,24 @@
 #define RIGHT_STEPS (3)
 #define TORQUE (4)
 
+
+unsigned long currenttime;
+unsigned long laststeptime;
+long stepinterval = 1280;
+
+
 long counter;
+
+// init motor values
+int DirFrontLeftValue = 0;
+int DirFrontRightValue = 0;
+int DirRearLeftValue = 0;
+int DirRearRightValue = 0;
+int StepFrontLeftValue = 0;
+int StepFrontRightValue = 0;
+int StepRearLeftValue = 0;
+int StepRearRightValue = 0;
+
 
 //
 int delayScalar = 1;
@@ -120,6 +139,8 @@ void setup()
 
   // setup timer configuration registers
   setup_timer();
+  laststeptime = micros(); 
+
 }
 
 // read a frame of CAN into buf[8]
@@ -196,24 +217,40 @@ void setMotorValues() {
 
 void loop()
 {
+  
+   currenttime = micros(); 
+
+  
   // check if data coming
   if (read_CAN_flag) {
     read_CAN();
     read_CAN_flag = false;
   }
 
-  // maybe perform stepping
-  if (drivingLeft && ((counter - counterLeft) > delayLeft)) {
-    flip_left();
-    //Serial.println("Flipping left");
-    counterLeft = counter;
+
+
+
+if (currenttime-laststeptime > stepinterval){
+    if (drivingLeft){
+    StepFrontLeftValue = 1-StepFrontLeftValue;
+    StepRearLeftValue = 1-StepRearLeftValue;
   }
   
-  if (drivingRight && ((counter - counterRight) > delayRight)) {
-    flip_right();
-    //Serial.println("Flipping right");
-    counterRight = counter;
+  if (drivingRight){
+    StepFrontRightValue = 1-StepFrontRightValue;
+    StepRearRightValue = 1-StepRearRightValue;
   }
 
-  counter++;
+  
+
+  laststeptime = currenttime;
+}
+
+
+// set values
+  digitalWrite(StepFrontLeftPin, StepFrontLeftValue);
+  digitalWrite(StepRearLeftPin, StepRearLeftValue);
+  digitalWrite(StepFrontRightPin, StepFrontRightValue);
+  digitalWrite(StepRearRightPin, StepRearRightValue);
+  
 }
